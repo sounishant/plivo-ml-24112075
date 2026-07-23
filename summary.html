@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Plivo STT End-of-Turn Detection - Technical Summary</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        h1, h2, h3 { color: #111; border-bottom: 2px solid #eaeaea; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f7f7f7; }
+        code { background-color: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+        pre { background-color: #f4f4f4; padding: 15px; border-radius: 6px; overflow-x: auto; }
+        .highlight { background-color: #e6ffed; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+
+    <h1>Plivo STT End-of-Turn Detection: Engineering Summary</h1>
+    <p><strong>Author:</strong> Nishant Sou (Roll No: 24112075)</p>
+    <p><strong>Track:</strong> End-of-Turn Detection (STT)</p>
+
+    <h2>1. Executive Overview</h2>
+    <p>Voice AI turn-taking requires balancing minimal response latency against user interruptions. A naive silence-only baseline results in severe delays (~1600 ms). This project implements a causal, prosodic and linguistic feature extraction pipeline combined with a metric-driven cross-validation training loop to minimize response delay while keeping false interruptions under 5%.</p>
+
+    <h2>2. Iterative Development & Progression (Run Log)</h2>
+    <table>
+        <tr>
+            <th>Run / Model</th>
+            <th>English Delay / AUC</th>
+            <th>Hindi Delay / AUC</th>
+            <th>Key Architectural Change</th>
+        </tr>
+        <tr>
+            <td><strong>Baseline</strong></td>
+            <td>1600 ms</td>
+            <td>850 ms</td>
+            <td>Silence-only thresholding.</td>
+        </tr>
+        <tr>
+            <td><strong>Run 1-3</strong> (Gradient Boosting)</td>
+            <td>1450 ms (0.710)</td>
+            <td>900 ms (0.690)</td>
+            <td>Added raw F0 slope and energy drop; initial tree models overfit severely.</td>
+        </tr>
+        <tr>
+            <td><strong>Run 4</strong> (Linguistic + L1 CV)</td>
+            <td>1384 ms (0.702)</td>
+            <td>850 ms (0.721)</td>
+            <td>Introduced creaky voice periodicity and relative floor features; optimized against <code>score.py</code> with short-hold sample weighting using L1 penalty.</td>
+        </tr>
+        <tr>
+            <td><strong>Run 5</strong> (Random Forest)</td>
+            <td>1240 ms (0.827)</td>
+            <td>754 ms (0.870)</td>
+            <td>Replaced linear models with a tuned Random Forest (depth=4) to capture non-linear feature bundles. Broke Hindi delay floor.</td>
+        </tr>
+        <tr>
+            <td><strong>Run 6</strong> (Grid-Searched RF)</td>
+            <td class="highlight"><strong>1087 ms (0.855)</strong></td>
+            <td class="highlight"><strong>687 ms (0.890)</strong></td>
+            <td>Expanded hyperparameter grid search <code>(n_est=200, depth=4, leaf=5)</code>, achieving optimal latency and record-high AUCs.</td>
+        </tr>
+    </table>
+
+    <h2>3. Human vs. Coding Agent Division of Labor</h2>
+    <ul>
+        <li><strong>Human Direction:</strong> Identified structural flaws in proxy optimization (maximizing generic AUC instead of Plivo's partial-AUC delay/cutoff metric), diagnosed the Hindi threshold compression bug, established the core causal constraints, thought of implementing grid search to get the optimized numbers.</li>
+        <li><strong>Coding Agent Assistance:</strong> Rapidly prototyped and implemented my strategies as i explained, handled repetitive code refactoring across training iterations.</li>
+    </ul>
+
+    <h2>4. Why This Beats the Status Quo</h2>
+    <p>Unlike raw silence thresholds or uncalibrated models that trigger premature interruptions or excessive wait times, our final Random Forest architecture utilizes <strong>linguistic turn-yielding bundles</strong> (creaky voice, relative energy floor distance, and pitch percentiles) paired with <strong>cost-sensitive training weights</strong> that heavily penalize short-hold errors. This enables robust generalization across multilingual datasets (English and Hindi) well below the 5% cutoff budget.</p>
+
+</body>
+</html>

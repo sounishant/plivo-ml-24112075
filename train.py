@@ -13,11 +13,7 @@ Ideas worth testing (this is the assignment, not a checklist):
   - speaking-rate context, position of the pause within the turn so far
   - anything you discover by LISTENING to your misclassified pauses
 """
-"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
-"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
-"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
-"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
-"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
+
 import argparse
 import joblib
 import numpy as np
@@ -29,7 +25,7 @@ from score import evaluate, THRESHOLDS, DELAYS
 
 warnings.filterwarnings('ignore')
 
-def oof_predict(X, y, groups, durations, n_estimators, max_depth, n_splits=5):
+def oof_predict(X, y, groups, durations, n_estimators, max_depth, min_samples_leaf, n_splits=5):
     oof = np.zeros(len(y))
     for tr, te in GroupKFold(n_splits=n_splits).split(X, y, groups):
         hold_short = (y[tr] == 0) & (durations[tr] < np.median(durations[tr][y[tr] == 0]))
@@ -38,7 +34,7 @@ def oof_predict(X, y, groups, durations, n_estimators, max_depth, n_splits=5):
         clf = RandomForestClassifier(
             n_estimators=n_estimators,
             max_depth=max_depth,
-            min_samples_leaf=10,
+            min_samples_leaf=min_samples_leaf,
             class_weight="balanced",
             random_state=42,
             n_jobs=-1
@@ -69,17 +65,18 @@ def main():
 
     best_params, best_lat = None, float('inf')
     
-    # Grid search over Random Forest hyperparameters using the real metric loop
-    for n_est in [100, 200]:
-        for depth in [3, 4, 5]:
-            oof = oof_predict(X, y, groups, durations, n_est, depth)
-            metric_res = real_metric(oof, y, durations, groups)
-            if metric_res:
-                lat, cut, t, d = metric_res
-                print(f"n_est={n_est} depth={depth} | OOF mean_delay={lat*1000:.0f}ms cutoff={cut*100:.1f}%")
-                if lat < best_lat:
-                    best_lat = lat
-                    best_params = (n_est, depth)
+    # Expanded Grid Search
+    for n_est in [100, 150, 200, 300]:
+        for depth in [3, 4, 5, 6]:
+            for min_leaf in [5, 10, 15]:
+                oof = oof_predict(X, y, groups, durations, n_est, depth, min_leaf)
+                metric_res = real_metric(oof, y, durations, groups)
+                if metric_res:
+                    lat, cut, t, d = metric_res
+                    print(f"n_est={n_est} depth={depth} leaf={min_leaf} | OOF mean_delay={lat*1000:.0f}ms cutoff={cut*100:.1f}%")
+                    if lat < best_lat:
+                        best_lat = lat
+                        best_params = (n_est, depth, min_leaf)
 
     print(f"\nTraining final Random Forest model with best params: {best_params}...")
     
@@ -89,7 +86,7 @@ def main():
     final_clf = RandomForestClassifier(
         n_estimators=best_params[0],
         max_depth=best_params[1],
-        min_samples_leaf=10,
+        min_samples_leaf=best_params[2],
         class_weight="balanced",
         random_state=42,
         n_jobs=-1

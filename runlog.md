@@ -21,3 +21,8 @@
   - English: 1240 ms (AUC: 0.827, Interrupted: 5.0%)
   - Hindi: 754 ms (AUC: 0.870, Interrupted: 5.0%)
   - *Note*: Swapped the model architecture to a tuned Random Forest (n_estimators=100, max_depth=4) to handle non linear feature interactions, finally broke the Hindi baseline bottleneck, dropping response delay to 754 ms while raising AUC to 0.870.
+
+  - **Run 6 (Random Forest Extended Grid Search)**:
+  - English: 1087 ms (AUC: 0.855, Interrupted: 5.0%)
+  - Hindi: 687 ms (AUC: 0.890, Interrupted: 5.0%)
+  - *Note*: Ran an expanded grid search over n_estimators, max_depth, and min_samples_leaf. Best configuration found was (n_est=200, depth=4, leaf=5), successfully driving down English delay to 1087ms and Hindi delay to 687ms with record-high AUCs.

@@ -71,3 +71,17 @@ def f0_contour(x, sr, frame_ms=40, hop_ms=HOP_MS):
     """Per-frame F0 (Hz), 0.0 where unvoiced. Longer frames help pitch."""
     fr = frames(x, sr, frame_ms=frame_ms, hop_ms=hop_ms)
     return np.array([autocorr_f0(f, sr) for f in fr], dtype=np.float32)
+
+def periodicity_strength(frame, sr, fmin=40.0, fmax=400.0):
+    frame = frame - np.mean(frame)
+    if np.max(np.abs(frame)) < 1e-4:
+        return 0.0, 0.0
+    ac = np.correlate(frame, frame, mode="full")[len(frame) - 1:]
+    if ac[0] <= 0:
+        return 0.0, 0.0
+    ac = ac / ac[0]
+    lo, hi = int(sr / fmax), min(int(sr / fmin), len(ac) - 1)
+    if hi <= lo:
+        return 0.0, 0.0
+    lag = lo + int(np.argmax(ac[lo:hi]))
+    return float(ac[lag]), float(sr / lag)

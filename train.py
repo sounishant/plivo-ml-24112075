@@ -14,10 +14,11 @@ Ideas worth testing (this is the assignment, not a checklist):
   - anything you discover by LISTENING to your misclassified pauses
 """
 """python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
+"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
 import argparse
 import joblib
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GroupShuffleSplit
@@ -34,7 +35,10 @@ def main():
     print(f"pooled: {len(y)} pauses, {len(set(groups))} turns, {len(args.data_dir)} folder(s)")
 
     tr, te = next(GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=0).split(X, y, groups))
-    clf = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000, class_weight="balanced"))
+    
+    # UPGRADED CLASSIFIER HERE
+    clf = make_pipeline(StandardScaler(), HistGradientBoostingClassifier(max_iter=100, class_weight="balanced", random_state=42))
+    
     clf.fit(X[tr], y[tr])
     p_te = clf.predict_proba(X[te])[:, 1]
     print(f"held-out turn AUC: {roc_auc_score(y[te], p_te):.3f}  (0.5=chance, 1.0=perfect)")

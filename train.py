@@ -17,30 +17,33 @@ Ideas worth testing (this is the assignment, not a checklist):
 """python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
 """python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
 """python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
+"""python train.py --data_dir eot_data/english eot_data/hindi --out model.joblib"""
 import argparse
 import joblib
 import numpy as np
 import warnings
 from sklearn.model_selection import GroupKFold
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
 from feat_eng import build_dataset
 from score import evaluate, THRESHOLDS, DELAYS
 
 warnings.filterwarnings('ignore')
 
-def oof_predict(X, y, groups, durations, C, n_splits=5):
+def oof_predict(X, y, groups, durations, n_estimators, max_depth, n_splits=5):
     oof = np.zeros(len(y))
     for tr, te in GroupKFold(n_splits=n_splits).split(X, y, groups):
-        # Heavily penalize errors on short holds (the ones that ruin the score budget)
         hold_short = (y[tr] == 0) & (durations[tr] < np.median(durations[tr][y[tr] == 0]))
         w = np.where(hold_short, 3.0, 1.0)   
         
-        clf = make_pipeline(StandardScaler(),
-                            LogisticRegression(C=C, penalty="l1", solver="liblinear",
-                                               max_iter=2000, class_weight="balanced", random_state=42))
-        clf.fit(X[tr], y[tr], logisticregression__sample_weight=w)
+        clf = RandomForestClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_leaf=10,
+            class_weight="balanced",
+            random_state=42,
+            n_jobs=-1
+        )
+        clf.fit(X[tr], y[tr], sample_weight=w)
         oof[te] = clf.predict_proba(X[te])[:, 1]
     return oof
 
@@ -64,30 +67,34 @@ def main():
     X, y, groups, keys, durations = build_dataset(args.data_dir)
     print(f"pooled: {len(y)} pauses, {len(set(groups))} turns")
 
-    # Pick the best hyperparameters based on the REAL delay metric, not AUC
-    best_c, best_lat = None, float('inf')
-    for C in [0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0]:
-        oof = oof_predict(X, y, groups, durations, C)
-        metric_res = real_metric(oof, y, durations, groups)
-        if metric_res:
-            lat, cut, t, d = metric_res
-            print(f"C={C:<6} OOF mean_delay={lat*1000:.0f}ms  cutoff={cut*100:.1f}%")
-            if lat < best_lat:
-                best_lat = lat
-                best_c = C
-        else:
-            print(f"C={C:<6} Failed to find valid operating point <= 5% cutoff")
-
-    print(f"\nTraining final model with best C={best_c}...")
+    best_params, best_lat = None, float('inf')
     
-    # Train final shipped model on all data with the best C
+    # Grid search over Random Forest hyperparameters using the real metric loop
+    for n_est in [100, 200]:
+        for depth in [3, 4, 5]:
+            oof = oof_predict(X, y, groups, durations, n_est, depth)
+            metric_res = real_metric(oof, y, durations, groups)
+            if metric_res:
+                lat, cut, t, d = metric_res
+                print(f"n_est={n_est} depth={depth} | OOF mean_delay={lat*1000:.0f}ms cutoff={cut*100:.1f}%")
+                if lat < best_lat:
+                    best_lat = lat
+                    best_params = (n_est, depth)
+
+    print(f"\nTraining final Random Forest model with best params: {best_params}...")
+    
     hold_short = (y == 0) & (durations < np.median(durations[y == 0]))
     w = np.where(hold_short, 3.0, 1.0)
     
-    final_clf = make_pipeline(StandardScaler(),
-                        LogisticRegression(C=best_c, penalty="l1", solver="liblinear",
-                                           max_iter=2000, class_weight="balanced", random_state=42))
-    final_clf.fit(X, y, logisticregression__sample_weight=w)
+    final_clf = RandomForestClassifier(
+        n_estimators=best_params[0],
+        max_depth=best_params[1],
+        min_samples_leaf=10,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1
+    )
+    final_clf.fit(X, y, sample_weight=w)
     joblib.dump(final_clf, args.out)
     print(f"saved -> {args.out}")
 

@@ -16,3 +16,8 @@
   - English: 1384 ms (AUC: 0.702)
   - Hindi: 850 ms (AUC: 0.721)
   - *Note*: Added periodicity and relative pitch/energy features, replaced AUC validation loop with a GroupKFold validation loop optimizing directly against the score.py evaluation metric with short hold sample weighting and also used L1 regularization.
+
+  - **Run 5 (Random Forest + CV Loss Optimization)**:
+  - English: 1240 ms (AUC: 0.827, Interrupted: 5.0%)
+  - Hindi: 754 ms (AUC: 0.870, Interrupted: 5.0%)
+  - *Note*: Swapped the model architecture to a tuned Random Forest (n_estimators=100, max_depth=4) to handle non linear feature interactions, finally broke the Hindi baseline bottleneck, dropping response delay to 754 ms while raising AUC to 0.870.
